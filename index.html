@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html class="light" lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="theme-color" content="#15304a"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="CarRent"/>
+<title>CarRent - Console SaaS de Location</title>
+<link rel="manifest" href="./public/manifest.webmanifest"/>
+<link rel="icon" href="./public/icon.svg" type="image/svg+xml"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="./src/js/tailwind-config.js"></script>
+<link rel="stylesheet" href="./src/styles/main.css"/>
+</head>
+<body class="bg-background text-on-surface">
+
+<!-- ============ AUTH GATE ============ -->
+<!-- Covers everything (z-[100]) until a Supabase session exists. Nothing
+     behind it is reachable, and no Supabase data call runs before login. -->
+<div id="authGate" class="fixed inset-0 bg-background z-[100] flex items-center justify-center">
+<div class="w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-xl">
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary mb-lg text-center">CarRent</h1>
+<p class="text-body-md text-on-surface-variant mb-lg text-center">Connexion staff</p>
+<input id="authEmail" type="email" autocomplete="username" placeholder="Email"
+    class="w-full mb-sm px-md py-sm border border-outline-variant rounded-lg font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary"/>
+<input id="authPassword" type="password" autocomplete="current-password" placeholder="Mot de passe"
+    onkeydown="if(event.key==='Enter') handleLogin();"
+    class="w-full mb-md px-md py-sm border border-outline-variant rounded-lg font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary"/>
+<button id="authLoginBtn" onclick="handleLogin()"
+    class="w-full bg-primary text-on-primary font-body-md font-semibold py-sm rounded-lg hover:opacity-90 transition-all">Se connecter</button>
+<p id="authError" class="hidden text-error text-caption mt-sm text-center"></p>
+</div>
+</div>
+
+<!-- ============ STAFF PILL (logged-in identity, shown on every page) ============ -->
+<div id="staffPill" class="hidden fixed top-3 right-6 z-[90] items-center gap-sm bg-surface-container-lowest border border-outline-variant rounded-full pl-md pr-xs py-xs shadow-sm">
+<span id="staffPillName" class="font-body-md text-body-md text-on-surface font-semibold"></span>
+<button onclick="handleLogout()" class="text-caption text-on-surface-variant hover:text-error px-sm py-1 rounded-full hover:bg-error-container/20 transition-all">Déconnexion</button>
+</div>
+
+<aside id="menu" class="fixed left-0 top-0 h-full w-[260px] bg-inverse-surface border-r border-outline-variant flex flex-col z-40">
+<div class="p-lg">
+<h1 class="font-headline-lg text-headline-lg font-bold text-surface-bright tracking-tight">CarRent</h1>
+</div>
+<nav class="flex-1 px-sm space-y-xs" id="main-nav">
+<a class="nav-link flex items-center gap-md px-lg py-md transition-colors border-l-4 border-primary bg-primary-container/10 text-surface-bright font-semibold" href="#" data-page="dashboard" onclick="showPage('dashboard'); return false;">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="nav-link flex items-center gap-md px-lg py-md transition-colors text-surface-variant hover:bg-primary-container/5 hover:text-surface-bright" href="#" data-page="clients" onclick="showPage('clients'); return false;">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-md text-body-md">Clients</span>
+</a>
+<a class="nav-link flex items-center gap-md px-lg py-md transition-colors text-surface-variant hover:bg-primary-container/5 hover:text-surface-bright" href="#" data-page="vehicules" onclick="showPage('vehicules'); return false;">
+<span class="material-symbols-outlined" data-icon="directions_car">directions_car</span>
+<span class="font-body-md text-body-md">Véhicules</span>
+</a>
+<a class="nav-link flex items-center gap-md px-lg py-md transition-colors text-surface-variant hover:bg-primary-container/5 hover:text-surface-bright" href="#" data-page="reservations" onclick="showPage('reservations'); return false;">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-body-md text-body-md">Réservations</span>
+</a>
+<a class="nav-link flex items-center gap-md px-lg py-md transition-colors text-surface-variant hover:bg-primary-container/5 hover:text-surface-bright" href="#" data-page="contrats" onclick="showPage('contrats'); return false;">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span class="font-body-md text-body-md">Contrats</span>
+</a>
+</nav>
+<div class="p-lg mt-auto border-t border-outline-variant/20">
+<button id="pwaInstallBtn" class="hidden w-full mb-md items-center justify-center gap-sm px-md py-sm bg-primary text-on-primary rounded-lg font-semibold hover:opacity-90 transition-all">
+<span class="material-symbols-outlined text-[20px]">install_mobile</span>
+Installer l'application
+</button>
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-surface-bright" data-icon="settings">settings</span>
+</div>
+<div class="flex flex-col">
+<span class="text-surface-bright font-semibold text-body-md">Admin</span>
+<span class="text-outline-variant text-caption">Gestionnaire</span>
+</div>
+</div>
+</div>
+</aside>
+
+<div id="offlineBanner" class="hidden fixed bottom-md left-1/2 -translate-x-1/2 z-[95] items-center gap-sm rounded-lg bg-inverse-surface px-md py-sm text-surface-bright shadow-lg text-body-md">
+<span class="material-symbols-outlined text-[18px]">cloud_off</span>
+Mode hors connexion - consultation locale uniquement
+</div>
+
+<!-- ============ GLOBAL: Contract signature modal ============ -->
+<div id="signatureModal" class="fixed inset-0 bg-inverse-surface/50 backdrop-blur-sm z-[80] items-center justify-center p-md" style="display:none;">
+<div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-3xl max-h-[94vh] overflow-y-auto">
+<div class="flex items-start justify-between gap-md px-lg py-md border-b border-outline-variant">
+<div>
+<p class="text-label-md uppercase text-primary font-bold tracking-widest">Signature numérique</p>
+<h3 class="font-title-md text-title-md text-on-surface mt-xs" id="signatureModalTitle">Signer le contrat</h3>
+<p class="text-caption text-on-surface-variant mt-xs" id="signatureModalClient">—</p>
+</div>
+<button class="p-sm hover:bg-surface-container-high rounded-full transition-all" onclick="closeSignatureModal()" title="Fermer"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="p-lg space-y-lg">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<section>
+<div class="flex items-center justify-between mb-sm">
+<p class="font-semibold text-on-surface">Signature du client</p>
+<button class="text-caption font-semibold text-primary hover:underline" onclick="clearSignatureCanvas('client')">Effacer</button>
+</div>
+<canvas id="clientSignatureCanvas" class="w-full h-40 bg-white border border-outline-variant rounded-lg cursor-crosshair" style="touch-action:none;"></canvas>
+</section>
+<section>
+<div class="flex items-center justify-between mb-sm">
+<p class="font-semibold text-on-surface">Signature de l'agence</p>
+<button class="text-caption font-semibold text-primary hover:underline" onclick="clearSignatureCanvas('agency')">Effacer</button>
+</div>
+<canvas id="agencySignatureCanvas" class="w-full h-40 bg-white border border-outline-variant rounded-lg cursor-crosshair" style="touch-action:none;"></canvas>
+</section>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">REPRÉSENTANT DE L'AGENCE</label>
+<input id="signatureAgencyName" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="Nom du représentant"/>
+</div>
+<label class="flex items-start gap-sm rounded-lg bg-surface-container-low p-md text-body-md text-on-surface cursor-pointer">
+<input id="signatureConsent" type="checkbox" class="mt-1 rounded"/>
+<span>Le client et l'agence confirment avoir vérifié le contrat et acceptent l'enregistrement de leurs signatures avec la date et l'heure.</span>
+</label>
+<p id="signatureModalError" class="hidden text-body-md text-error bg-error-container/30 rounded-lg px-md py-sm"></p>
+<div class="flex flex-col-reverse sm:flex-row justify-end gap-sm">
+<button class="px-lg py-sm bg-surface-container-highest text-on-surface-variant rounded-lg font-semibold hover:bg-outline-variant transition-all" onclick="closeSignatureModal()">Annuler</button>
+<button id="saveSignaturesBtn" class="px-lg py-sm bg-primary text-on-primary rounded-lg font-semibold hover:opacity-90 transition-all" onclick="saveContractSignatures()">Enregistrer les signatures</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Notification dropdown - global, shared by every page's bell icon -->
+<div class="hidden" id="notifMod">
+<p class="font-body-md text-body-md text-on-surface">Vous n'avez aucune notification pour le moment.</p>
+<button id="closeBtn" class="mt-sm text-primary font-label-md font-semibold hover:underline">Fermer</button>
+</div>
+
+<!-- ============ PAGE: DASHBOARD ============ -->
+<div id="page-root-dashboard" class="page-root" style="display:block;">
+<main class="ml-[260px] min-h-screen dashboard-main">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] flex justify-between items-center px-lg h-16 bg-surface dark:bg-surface-container-low border-b border-outline-variant dark:border-outline z-30">
+<div class="flex items-center gap-md">
+<button class="menu-toggle-btn hover:bg-surface-container-high rounded-full p-2 transition-all">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="menu">menu</span>
+</button>
+<h2 class="font-headline-lg text-headline-lg font-bold text-primary dark:text-inverse-primary">CarRent</h2>
+</div>
+<div class="hidden lg:flex relative luno-search">
+<span class="absolute left-md top-1/2 -translate-y-1/2 material-symbols-outlined text-outline text-[20px]">search</span>
+<input class="w-full pl-12 pr-md py-sm bg-white border border-outline-variant rounded-lg text-body-md" placeholder="Rechercher un client, un véhicule, une réservation..." type="text"/>
+</div>
+<div class="flex items-center gap-lg">
+<button class="luno-action" onclick="openReservationPanel()" title="Nouvelle réservation">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+<button class="notif-bell-btn p-sm hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full transition-all">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<!-- Page Canvas -->
+<div class="pt-24 pb-lg px-lg space-y-lg dashboard-canvas">
+<section class="dashboard-hero flex flex-col xl:flex-row xl:items-end xl:justify-between gap-lg">
+<div>
+<p class="dashboard-eyebrow">Vue d'ensemble</p>
+<h1 class="text-[25px] leading-8 font-semibold text-on-surface" id="dashboardGreeting">Bonjour</h1>
+<p class="text-body-md text-on-surface-variant mt-xs">Pilotez votre flotte et vos locations en un coup d'œil.</p>
+</div>
+<div class="flex flex-wrap items-center gap-sm">
+<div class="relative">
+<span class="absolute right-md top-1/2 -translate-y-1/2 material-symbols-outlined text-outline text-[18px]">calendar_month</span>
+<input class="w-[260px] pr-12 px-md py-sm bg-white border border-outline-variant rounded-lg text-body-md" id="dashboardDateRange" value="" readonly/>
+</div>
+<button class="dashboard-primary-action" onclick="openReservationPanel()"><span class="material-symbols-outlined text-[18px]">add</span> Nouvelle location</button>
+</div>
+</section>
+<!-- KPI Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-md dashboard-kpis">
+<!-- KPI 1 -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm luno-kpi kpi-active">
+<div class="luno-kpi-icon"><span class="material-symbols-outlined text-[24px]">key</span></div>
+<div>
+<span class="luno-kpi-label">Locations en cours</span>
+<span class="luno-kpi-value" id="kpi-locations-actives">0</span>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm luno-kpi kpi-available">
+<div class="luno-kpi-icon"><span class="material-symbols-outlined text-[24px]">directions_car</span></div>
+<div>
+<span class="luno-kpi-label">Véhicules disponibles</span>
+<span class="luno-kpi-value" id="kpi-vehicules-dispo">0</span>
+</div>
+</div>
+<!-- KPI 3 -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm luno-kpi kpi-alert">
+<div class="luno-kpi-icon danger"><span class="material-symbols-outlined text-[24px]">schedule</span></div>
+<div>
+<span class="luno-kpi-label">Retours en retard</span>
+<span class="luno-kpi-value" id="kpi-retards">0</span>
+</div>
+</div>
+<!-- KPI 4 -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm luno-kpi kpi-revenue">
+<div class="luno-kpi-icon green"><span class="material-symbols-outlined text-[24px]">account_balance_wallet</span></div>
+<div>
+<span class="luno-kpi-label">Revenu du mois</span>
+<span class="luno-kpi-value" id="kpi-revenu-mois">0€</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm luno-kpi dashboard-secondary-stat">
+<div class="luno-kpi-icon warn"><span class="material-symbols-outlined text-[28px]">build</span></div>
+<div>
+<span class="luno-kpi-label">Maintenance</span>
+<span class="luno-kpi-value" id="kpi-maintenance">0</span>
+<p class="luno-kpi-note">véhicules concernés</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm luno-kpi dashboard-secondary-stat">
+<div class="luno-kpi-icon warn"><span class="material-symbols-outlined text-[28px]">receipt_long</span></div>
+<div>
+<span class="luno-kpi-label">Contrats à facturer</span>
+<span class="luno-kpi-value" id="kpi-contrats-facturer">0</span>
+<p class="luno-kpi-note">à vérifier</p>
+</div>
+</div>
+</div>
+<!-- Dashboard Content Grid (Asymmetric) -->
+<div class="grid grid-cols-12 gap-lg dashboard-grid">
+<!-- Main Feature: Fleet Availability Timeline (Gantt) -->
+<div class="col-span-12 bg-surface-container-lowest p-lg rounded-xl border border-outline-variant shadow-sm dashboard-fleet-card">
+<div class="flex flex-col sm:flex-row justify-between sm:items-center gap-md mb-lg">
+<div>
+<p class="dashboard-card-kicker">Planning opérationnel</p>
+<h3 class="font-title-md text-title-md text-on-surface mt-xs">Disponibilité de la flotte</h3>
+</div>
+<div class="flex gap-sm">
+<div class="flex items-center gap-xs text-caption">
+<span class="w-3 h-3 bg-primary-container rounded-full"></span> Réservé
+                            </div>
+<div class="flex items-center gap-xs text-caption">
+<span class="w-3 h-3 bg-secondary-container rounded-full"></span> Libre
+                            </div>
+<div class="flex items-center gap-xs text-caption">
+<span class="w-3 h-3 bg-tertiary-fixed rounded-full"></span> Maintenance
+                            </div>
+</div>
+</div>
+<div class="overflow-x-auto hide-scrollbar">
+<div class="min-w-[800px]">
+<!-- Timeline Header -->
+<div class="grid grid-cols-11 mb-md" id="dashboard-gantt-header"></div>
+<!-- Vehicle Rows -->
+<div class="space-y-sm" id="dashboard-gantt-body"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<button onclick="openReservationPanel()" class="hidden fixed bottom-lg right-lg w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 group">
+<span class="material-symbols-outlined text-2xl" data-icon="add">add</span>
+<span class="absolute right-16 bg-inverse-surface text-surface-bright px-md py-xs rounded-lg text-body-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Nouvelle réservation</span>
+</button>
+</div>
+
+<!-- ============ PAGE: CLIENTS ============ -->
+<div id="page-root-clients" class="page-root" style="display:none;">
+<main class="ml-[260px] pt-16 p-lg bg-background min-h-screen">
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] flex justify-between items-center px-lg h-16 bg-surface border-b border-outline-variant z-30">
+<div class="flex items-center gap-md">
+<button class="menu-toggle-btn hover:bg-surface-container-high rounded-full p-2 transition-all">
+<span class="material-symbols-outlined text-on-surface" data-icon="menu">menu</span>
+</button>
+<h2 class="font-title-md text-title-md text-on-surface">Gestion des Clients</h2>
+</div>
+<button class="notif-bell-btn p-sm hover:bg-surface-container-high rounded-full transition-all">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+</header>
+<!-- Stats Bar -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter mb-lg">
+<div class="bg-surface-container-low border border-outline-variant p-md rounded-xl flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">groups</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-label-md uppercase font-bold">Total Clients</p>
+<p class="text-headline-lg font-headline-lg font-bold" id="stat-clients-total">0</p>
+</div>
+</div>
+<div class="bg-surface-container-low border border-outline-variant p-md rounded-xl flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">person_check</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-label-md uppercase font-bold">Actifs</p>
+<p class="text-headline-lg font-headline-lg font-bold" id="stat-clients-actifs">0</p>
+</div>
+</div>
+<div class="bg-surface-container-low border border-outline-variant p-md rounded-xl flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-tertiary-container/10 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">report</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-label-md uppercase font-bold">Signalés</p>
+<p class="text-headline-lg font-headline-lg font-bold" id="stat-clients-signales">0</p>
+</div>
+</div>
+<div class="bg-surface-container-low border border-outline-variant p-md rounded-xl flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-error-container/20 flex items-center justify-center text-error">
+<span class="material-symbols-outlined">block</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-label-md uppercase font-bold">Blacklistés</p>
+<p class="text-headline-lg font-headline-lg font-bold" id="stat-clients-blacklistes">0</p>
+</div>
+</div>
+</div>
+<!-- Filter and Search Actions -->
+<div class="bg-white border border-outline-variant rounded-xl p-md mb-lg">
+<div class="flex flex-col lg:flex-row lg:items-center gap-md justify-between">
+<div class="relative flex-1 max-w-xl">
+<span class="absolute left-md top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">search</span>
+<input class="w-full pl-12 pr-md py-md bg-surface-container-low border-outline-variant focus:border-primary focus:ring-primary rounded-lg text-body-md" id="client-search" oninput="renderClients()" placeholder="Rechercher par Nom, Tél ou Permis..." type="text"/>
+</div>
+<button onclick="openAddClientModal()" class="inline-flex items-center justify-center gap-sm px-md py-md bg-primary text-on-primary rounded-lg font-semibold hover:opacity-90 active:scale-95 transition-all whitespace-nowrap">
+<span class="material-symbols-outlined text-[20px]">person_add</span>
+Nouveau client
+</button>
+<div class="flex items-center gap-sm overflow-x-auto no-scrollbar pb-xs" id="client-filter-tabs">
+<button class="client-filter-btn px-md py-sm rounded-full bg-primary text-on-primary font-semibold text-body-md whitespace-nowrap" data-filter="all" onclick="setClientFilter('all', this)">Tous</button>
+<button class="client-filter-btn px-md py-sm rounded-full bg-surface-container-high text-on-surface-variant hover:bg-outline-variant/30 font-medium text-body-md whitespace-nowrap" data-filter="actif" onclick="setClientFilter('actif', this)">Actifs</button>
+<button class="client-filter-btn px-md py-sm rounded-full bg-surface-container-high text-on-surface-variant hover:bg-outline-variant/30 font-medium text-body-md whitespace-nowrap" data-filter="signale" onclick="setClientFilter('signale', this)">Signalés</button>
+<button class="client-filter-btn px-md py-sm rounded-full bg-surface-container-high text-on-surface-variant hover:bg-outline-variant/30 font-medium text-body-md whitespace-nowrap" data-filter="blackliste" onclick="setClientFilter('blackliste', this)">Blacklistés</button>
+<button class="client-filter-btn px-md py-sm rounded-full bg-surface-container-high text-on-surface-variant hover:bg-outline-variant/30 font-medium text-body-md whitespace-nowrap" data-filter="vip" onclick="setClientFilter('vip', this)">VIP</button>
+</div>
+</div>
+</div>
+<!-- Data Table Container -->
+<div class="bg-white border border-outline-variant rounded-xl overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="px-lg py-md text-label-md uppercase text-on-surface-variant font-bold">Client</th>
+<th class="px-lg py-md text-label-md uppercase text-on-surface-variant font-bold">Contact</th>
+<th class="px-lg py-md text-label-md uppercase text-on-surface-variant font-bold">Permis Exp.</th>
+<th class="px-lg py-md text-label-md uppercase text-on-surface-variant font-bold">Locations</th>
+<th class="px-lg py-md text-label-md uppercase text-on-surface-variant font-bold">Risque</th>
+<th class="px-lg py-md text-label-md uppercase text-on-surface-variant font-bold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant" id="clients-tbody">
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="bg-surface-container-low px-lg py-sm border-t border-outline-variant flex items-center justify-between">
+<p class="text-label-md text-on-surface-variant" id="clients-pagination-text">Affichage de 0 clients</p>
+<div class="flex items-center gap-xs">
+<button class="p-xs hover:bg-outline-variant/20 rounded disabled:opacity-30">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded bg-primary text-on-primary text-body-md font-bold">1</button>
+<button class="w-8 h-8 rounded hover:bg-outline-variant/20 text-body-md">2</button>
+<button class="w-8 h-8 rounded hover:bg-outline-variant/20 text-body-md">3</button>
+<button class="p-xs hover:bg-outline-variant/20 rounded">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<button onclick="openAddClientModal()" class="fixed bottom-xl right-xl w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg hidden md:flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50" title="Nouveau client">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 600;">person_add</span>
+</button>
+</div>
+
+<!-- ============ PAGE: VEHICULES ============ -->
+<div id="page-root-vehicules" class="page-root" style="display:none;">
+<main class="ml-[260px] pt-16 p-xl flex-1 overflow-y-auto min-h-screen">
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] flex justify-between items-center px-lg h-16 bg-surface border-b border-outline-variant z-30">
+<div class="flex items-center gap-md">
+<button class="menu-toggle-btn hover:bg-surface-container-high rounded-full p-2 transition-all">
+<span class="material-symbols-outlined text-on-surface" data-icon="menu">menu</span>
+</button>
+<h2 class="font-title-md text-title-md text-on-surface">Gestion de Flotte</h2>
+</div>
+<button class="notif-bell-btn p-sm hover:bg-surface-container-high rounded-full transition-all">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+</header>
+<!-- Statistics Bar (Stat Cards Pattern) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter mb-xl">
+<div class="bg-surface-container-lowest border border-outline-variant p-lg rounded-lg">
+<p class="text-label-md text-on-surface-variant mb-xs">Flotte Totale</p>
+<div class="flex items-end justify-between">
+<h3 class="text-headline-lg font-headline-lg" id="stat-vehicules-total">0</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant p-lg rounded-lg">
+<p class="text-label-md text-on-surface-variant mb-xs">Disponibles</p>
+<div class="flex items-end justify-between">
+<h3 class="text-headline-lg font-headline-lg" id="stat-vehicules-dispo">0</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant p-lg rounded-lg">
+<p class="text-label-md text-on-surface-variant mb-xs">Utilisation</p>
+<div class="flex items-end justify-between">
+<h3 class="text-headline-lg font-headline-lg" id="stat-vehicules-utilisation">0%</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant p-lg rounded-lg">
+<p class="text-label-md text-on-surface-variant mb-xs">Revenu moyen/j</p>
+<div class="flex items-end justify-between">
+<h3 class="text-headline-lg font-headline-lg" id="stat-vehicules-revenu">0€</h3>
+</div>
+</div>
+</div>
+<!-- Filters & Actions -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-md mb-lg border-b border-outline-variant">
+<div class="relative w-full md:max-w-sm mb-md md:mb-0">
+<span class="absolute left-md top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">search</span>
+<input class="w-full pl-12 pr-md py-sm bg-white border border-outline-variant rounded-lg text-body-md" id="vehicule-search" oninput="renderVehicles()" placeholder="Rechercher modele ou plaque..." type="text"/>
+</div>
+<div class="flex gap-lg" id="vehicule-filter-tabs">
+<button class="vehicule-filter-btn pb-md px-sm active-tab text-label-md" data-filter="all" onclick="setVehiculeFilter('all', this)">Tous</button>
+<button class="vehicule-filter-btn pb-md px-sm text-on-surface-variant hover:text-primary transition-colors text-label-md" data-filter="available" onclick="setVehiculeFilter('available', this)">Disponibles</button>
+<button class="vehicule-filter-btn pb-md px-sm text-on-surface-variant hover:text-primary transition-colors text-label-md" data-filter="rented" onclick="setVehiculeFilter('rented', this)">Loués</button>
+<button class="vehicule-filter-btn pb-md px-sm text-on-surface-variant hover:text-primary transition-colors text-label-md" data-filter="maintenance" onclick="setVehiculeFilter('maintenance', this)">Maintenance</button>
+<button class="vehicule-filter-btn pb-md px-sm text-on-surface-variant hover:text-primary transition-colors text-label-md" data-filter="retired" onclick="setVehiculeFilter('retired', this)">Retirés</button>
+</div>
+<div class="flex items-center gap-sm mb-md md:mb-0">
+<button onclick="openAddVehicleModal()" class="flex items-center gap-xs px-md py-sm bg-primary text-on-primary rounded-lg font-semibold hover:opacity-90 transition-all text-body-md">
+<span class="material-symbols-outlined text-sm">add</span>
+                        Ajouter un véhicule
+                    </button>
+</div>
+</div>
+<!-- Vehicle Card Grid -->
+<div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg" id="vehicles-grid">
+</div>
+<!-- Add New Card (Empty State Trigger) -->
+<div class="border-2 border-dashed border-outline-variant rounded-xl flex flex-col items-center justify-center p-xl hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group h-full min-h-[200px] mt-gutter" onclick="openAddVehicleModal()">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center mb-md group-hover:bg-primary group-hover:text-on-primary transition-colors">
+<span class="material-symbols-outlined text-display-lg">add</span>
+</div>
+<p class="font-semibold text-on-surface-variant group-hover:text-primary">Nouveau Véhicule</p>
+<p class="text-caption text-outline text-center mt-xs">Ajouter une unité à la flotte</p>
+</div>
+</main>
+<button onclick="openAddVehicleModal()" class="fixed bottom-xl right-xl w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 md:hidden">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+
+<!-- ============ PAGE: RESERVATIONS ============ -->
+<div id="page-root-reservations" class="page-root" style="display:none;">
+<main class="ml-[260px] flex-1 flex flex-col h-screen overflow-hidden">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-lg h-16 w-full fixed top-0 right-0 w-[calc(100%-260px)] bg-surface border-b border-outline-variant z-30">
+<div class="flex items-center gap-md">
+<button class="menu-toggle-btn p-xs hover:bg-surface-container-high rounded-full transition-all active:scale-95">
+<span class="material-symbols-outlined text-primary">menu</span>
+</button>
+<h1 class="font-title-md text-title-md text-primary">Gestion des Réservations</h1>
+</div>
+<div class="flex items-center gap-lg">
+<div class="notif-bell-btn relative cursor-pointer">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></span>
+</div>
+<div class="w-8 h-8 rounded-full border border-outline-variant bg-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A small circular avatar placeholder for a user profile, featuring a friendly, professional interface design, blurred soft-focus background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyLLYvigsv_1jh2plPDcoyYFcrcUHNWtTHzWelGI-DGQiTWiSG5lNkfw5snjlCMTInsG2Pj6cdSMnwNIu2DMxs5zFm8C4aNjFi8H1DcMi-PAPKGIwYAojgZnIfBZoFDJYQzZ4gdWvnNqm8J_KZ6AJUYRV1VYFC7Gic292jfo6yTEDcR_lfjVhT5ZPbtZkkrr1FMRpXxTcrAWeuUioDzkE5Zl3IZNsrC-efkQCEk3p4houHYO5GnWkyqA"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Canvas -->
+<div class="mt-16 p-lg flex-1 overflow-y-auto custom-scrollbar bg-background">
+<!-- Stat Bar -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-md mb-lg">
+<div class="bg-white border border-outline-variant p-md rounded-lg flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-xs">Actives</span>
+<div class="flex items-end justify-between">
+<span class="font-headline-lg text-headline-lg text-primary" id="stat-res-actives">0</span>
+</div>
+</div>
+<div class="bg-white border border-outline-variant p-md rounded-lg flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-xs">Confirmées</span>
+<div class="flex items-end justify-between">
+<span class="font-headline-lg text-headline-lg text-on-surface" id="stat-res-confirmees">0</span>
+</div>
+</div>
+<div class="bg-white border border-outline-variant p-md rounded-lg flex flex-col border-l-4 border-l-tertiary-container">
+<span class="font-label-md text-label-md text-tertiary font-bold uppercase tracking-wider mb-xs">Retards</span>
+<div class="flex items-end justify-between">
+<span class="font-headline-lg text-headline-lg text-tertiary" id="stat-res-retards">0</span>
+</div>
+</div>
+<div class="bg-white border border-outline-variant p-md rounded-lg flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-xs">Revenu</span>
+<div class="flex items-end justify-between">
+<span class="font-headline-lg text-headline-lg text-secondary" id="stat-res-revenu">0€</span>
+</div>
+</div>
+</div>
+<!-- Filter Tabs -->
+<div class="flex items-center gap-md border-b border-outline-variant mb-lg overflow-x-auto whitespace-nowrap" id="res-filter-tabs">
+<button class="res-filter-btn px-md py-sm font-semibold border-b-2 border-primary text-primary transition-all" data-filter="all" onclick="setResFilter('all', this)">Tous</button>
+<button class="res-filter-btn px-md py-sm font-body-md border-b-2 border-transparent text-on-surface-variant hover:text-primary transition-all" data-filter="CONFIRMED" onclick="setResFilter('CONFIRMED', this)">Confirmé</button>
+<button class="res-filter-btn px-md py-sm font-body-md border-b-2 border-transparent text-on-surface-variant hover:text-primary transition-all" data-filter="ACTIVE" onclick="setResFilter('ACTIVE', this)">Actif</button>
+<button class="res-filter-btn px-md py-sm font-body-md border-b-2 border-transparent text-on-surface-variant hover:text-primary transition-all" data-filter="OVERDUE" onclick="setResFilter('OVERDUE', this)">OVERDUE</button>
+<button class="res-filter-btn px-md py-sm font-body-md border-b-2 border-transparent text-on-surface-variant hover:text-primary transition-all" data-filter="COMPLETED" onclick="setResFilter('COMPLETED', this)">Complété</button>
+<button class="res-filter-btn px-md py-sm font-body-md border-b-2 border-transparent text-on-surface-variant hover:text-primary transition-all" data-filter="CANCELLED" onclick="setResFilter('CANCELLED', this)">Annulé</button>
+</div>
+<!-- Table Container -->
+<div class="bg-white border border-outline-variant rounded-lg overflow-hidden shadow-sm mb-lg">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="px-md py-md font-label-md text-on-surface-variant uppercase tracking-wider">Client</th>
+<th class="px-md py-md font-label-md text-on-surface-variant uppercase tracking-wider">Véhicule</th>
+<th class="px-md py-md font-label-md text-on-surface-variant uppercase tracking-wider">Dates</th>
+<th class="px-md py-md font-label-md text-on-surface-variant uppercase tracking-wider">Status</th>
+<th class="px-md py-md font-label-md text-on-surface-variant uppercase tracking-wider">Total</th>
+<th class="px-md py-md font-label-md text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant" id="reservations-tbody">
+</tbody>
+</table>
+<div class="px-md py-sm bg-surface-container-low border-t border-outline-variant flex items-center justify-between">
+<span class="font-caption text-on-surface-variant" id="reservations-pagination-text">Affichage de 0 réservations</span>
+</div>
+</div>
+<!-- Gantt Timeline Section -->
+<div class="bg-white border border-outline-variant rounded-lg p-lg shadow-sm">
+<div class="flex items-center justify-between mb-md">
+<h2 class="font-title-md text-title-md text-on-surface">Planning de la flotte</h2>
+<div class="flex items-center gap-md">
+<span class="flex items-center gap-xs font-label-md"><span class="w-2 h-2 rounded-full bg-primary"></span> Confirmé</span>
+<span class="flex items-center gap-xs font-label-md"><span class="w-2 h-2 rounded-full bg-secondary"></span> Actif</span>
+<span class="flex items-center gap-xs font-label-md"><span class="w-2 h-2 rounded-full bg-tertiary"></span> Retard</span>
+</div>
+</div>
+<div class="relative border border-outline-variant rounded overflow-hidden">
+<!-- Gantt Header (Dates) -->
+<div class="flex bg-surface-container-low border-b border-outline-variant">
+<div class="w-40 border-r border-outline-variant p-sm font-label-md">Véhicule</div>
+<div class="flex-1 flex overflow-x-auto gantt-grid custom-scrollbar" id="reservations-gantt-header">
+</div>
+</div>
+<!-- Gantt Body -->
+<div class="flex flex-col" id="reservations-gantt-body">
+</div>
+</div>
+</div>
+</main>
+<button onclick="openReservationPanel()" class="fixed bottom-lg right-lg w-14 h-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-50">
+<span class="material-symbols-outlined text-2xl">add</span>
+<span class="absolute right-16 bg-inverse-surface text-surface-bright px-md py-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap font-label-md">Nouvelle Réservation</span>
+</button>
+</div>
+
+<!-- ============ PAGE: CONTRATS ============ -->
+<div id="page-root-contrats" class="page-root" style="display:none;">
+<main class="flex-1 ml-[260px]">
+<!-- TopAppBar (Shared Component) -->
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] flex justify-between items-center px-lg h-16 bg-surface border-b border-outline-variant z-30">
+<div class="flex items-center gap-md">
+<button class="menu-toggle-btn hover:bg-surface-container-high rounded-full p-2 transition-all">
+<span class="material-symbols-outlined text-on-surface" data-icon="menu">menu</span>
+</button>
+<h2 class="font-title-md text-title-md text-on-surface">Détails du Contrat</h2>
+</div>
+<div class="flex items-center gap-md">
+<button class="notif-bell-btn material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</button>
+<div class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed font-bold text-xs border border-outline-variant">JS</div>
+</div>
+</header>
+<!-- Content Area -->
+<div class="mt-16 p-xl max-w-[1200px] mx-auto">
+<!-- Contract selector -->
+<div class="mb-lg flex items-center gap-md">
+<label class="font-label-md text-label-md text-on-surface-variant">CONTRAT</label>
+<select class="bg-white border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md" id="contractSelector" onchange="renderContractDetail(this.value)"></select>
+</div>
+<div id="contractEmptyState" class="text-center py-xl text-on-surface-variant" style="display:none;">
+Aucun contrat pour le moment — un contrat est généré automatiquement à la confirmation d'une réservation.
+</div>
+<div id="contractDetailWrapper">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-md mb-lg">
+<div>
+<div class="flex items-center gap-sm mb-xs">
+<span class="font-headline-lg text-headline-lg text-on-surface" id="contractNumberDisplay">—</span>
+<span class="px-md py-xs bg-secondary-container/20 text-on-secondary-container rounded-full text-[12px] font-semibold border border-secondary/20 uppercase tracking-wider" id="contractStatusBadge">—</span>
+</div>
+<a class="text-primary font-body-md flex items-center gap-xs hover:underline" href="#" onclick="showPage('reservations'); return false;">
+<span class="material-symbols-outlined text-[18px]" data-icon="link">link</span>
+<span id="contractReservationLink">Voir la réservation liée</span>
+</a>
+</div>
+<!-- Action Bar -->
+<div class="flex flex-wrap gap-sm">
+<button class="px-md py-sm bg-white border border-outline-variant text-on-surface-variant rounded-lg flex items-center gap-xs hover:bg-surface-container-low transition-all active:scale-95" onclick="downloadContractPdf()">
+<span class="material-symbols-outlined text-[20px]" data-icon="download">download</span>
+                        Télécharger PDF
+                    </button>
+<button class="px-md py-sm bg-white border border-outline-variant text-on-surface-variant rounded-lg flex items-center gap-xs hover:bg-surface-container-low transition-all active:scale-95" onclick="resendContract()">
+<span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>
+                        Renvoyer
+                    </button>
+<button class="px-md py-sm bg-error/10 text-error border border-error/20 rounded-lg flex items-center gap-xs hover:bg-error/20 transition-all active:scale-95" onclick="voidContract()">
+<span class="material-symbols-outlined text-[20px]" data-icon="cancel">cancel</span>
+                        Annuler contrat
+                    </button>
+</div>
+</div>
+<!-- Bento Layout Content -->
+<div class="space-y-lg">
+<!-- Main Contract Information (Col 1 & 2) -->
+<div class="space-y-lg">
+<div class="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+<div class="px-lg py-md bg-surface-container-low border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-title-md text-title-md text-on-surface">Informations Générales</h3>
+<span class="material-symbols-outlined text-outline" data-icon="info">info</span>
+</div>
+<div class="p-lg grid grid-cols-1 md:grid-cols-2 gap-xl">
+<!-- Left Column Info -->
+<div class="space-y-md">
+<div>
+<p class="text-on-surface-variant font-label-md uppercase tracking-tight text-[11px] mb-xs">Client</p>
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="person">person</span>
+</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface" id="contractClientName">—</p>
+<p class="text-caption text-on-surface-variant" id="contractClientPhone">—</p>
+</div>
+</div>
+</div>
+<div>
+<p class="text-on-surface-variant font-label-md uppercase tracking-tight text-[11px] mb-xs">Véhicule</p>
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center overflow-hidden">
+<span class="material-symbols-outlined text-outline-variant">directions_car</span>
+</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface" id="contractVehicleName">—</p>
+<p class="text-caption text-on-surface-variant" id="contractVehiclePlate">—</p>
+</div>
+</div>
+</div>
+<div>
+<p class="text-on-surface-variant font-label-md uppercase tracking-tight text-[11px] mb-xs">Kilométrage</p>
+<p class="font-title-md text-on-surface" id="contractKm">—</p>
+</div>
+</div>
+<!-- Right Column Info -->
+<div class="space-y-md">
+<div>
+<p class="text-on-surface-variant font-label-md uppercase tracking-tight text-[11px] mb-xs">Période de Location</p>
+<div class="p-md bg-surface-container-lowest border border-outline-variant rounded-lg">
+<div class="flex justify-between items-center mb-xs">
+<span class="text-caption font-semibold" id="contractPeriodStart">—</span>
+<span class="material-symbols-outlined text-outline text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+<span class="text-caption font-semibold" id="contractPeriodEnd">—</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full" id="contractProgressBar" style="width:0%"></div>
+</div>
+<p class="text-[11px] text-on-surface-variant mt-xs" id="contractDurationText">—</p>
+</div>
+</div>
+<div class="space-y-sm">
+<div class="flex justify-between items-center text-body-md">
+<span class="text-on-surface-variant" id="contractTarifLabel">Tarif journalier</span>
+<span class="text-on-surface font-semibold" id="contractTarifAmount">—</span>
+</div>
+<div class="flex justify-between items-center text-body-md">
+<span class="text-on-surface-variant">Extras &amp; Options</span>
+<span class="text-on-surface font-semibold" id="contractExtrasAmount">—</span>
+</div>
+<hr class="border-outline-variant"/>
+<div class="flex justify-between items-center">
+<span class="font-title-md text-on-surface">Total TTC</span>
+<span class="text-headline-lg font-bold text-primary" id="contractTotalAmount">—</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Signatures Section -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="bg-white border border-outline-variant rounded-xl p-lg shadow-sm">
+<p class="text-on-surface-variant font-label-md uppercase tracking-widest text-[10px] mb-md">Signature CarRent</p>
+<div class="h-32 signature-pad border border-dashed border-outline-variant rounded-lg flex items-center justify-center overflow-hidden" id="contractAgencySignatureBox">
+<span class="text-caption text-outline italic">En attente</span>
+</div>
+<p class="mt-sm text-caption text-outline text-center italic" id="contractAgencySignedText">—</p>
+</div>
+<div class="bg-white border border-outline-variant rounded-xl p-lg shadow-sm">
+<p class="text-on-surface-variant font-label-md uppercase tracking-widest text-[10px] mb-md" id="contractClientSignatureLabel">Signature Client</p>
+<div class="h-32 signature-pad border border-dashed border-outline-variant rounded-lg flex items-center justify-center overflow-hidden" id="contractClientSignatureBox">
+<span class="text-caption text-outline italic">En attente</span>
+</div>
+<p class="mt-sm text-caption text-outline text-center italic" id="contractClientSignedText">—</p>
+</div>
+</div>
+</div>
+</div>
+<!-- close contractDetailWrapper -->
+</div>
+</div>
+</main>
+</div>
+
+<!-- ============ GLOBAL: Client Detail modal ============ -->
+<div id="clientDetailModal" class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-50 items-center justify-center" style="display:none;">
+<div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-lg p-lg space-y-md max-h-[85vh] overflow-y-auto">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-title-md text-title-md" id="clientDetailName">—</h3>
+<div class="flex items-center gap-xs mt-1" id="clientDetailBadges"></div>
+<p class="text-caption text-on-surface-variant mt-1" id="clientDetailMeta">—</p>
+</div>
+<button class="p-sm hover:bg-surface-container-high rounded-full transition-all" onclick="closeClientDetail()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="grid grid-cols-2 gap-md text-body-md">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase">Téléphone</p>
+<p id="clientDetailPhone">—</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase">Permis (exp.)</p>
+<p id="clientDetailPermis">—</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase">Email</p>
+<p id="clientDetailEmail">—</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase">Adresse</p>
+<p id="clientDetailAddress">—</p>
+</div>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase mb-xs">Historique des réservations</p>
+<div class="space-y-xs" id="clientDetailReservations"></div>
+</div>
+<div class="flex justify-end gap-sm pt-sm">
+<button class="px-md py-sm bg-error-container/20 text-error rounded-lg font-semibold hover:bg-error-container/40 transition-all" onclick="deleteClient(currentDetailClientId)">Supprimer</button>
+<button class="px-md py-sm bg-primary/10 text-primary rounded-lg font-semibold hover:bg-primary/20 transition-all" onclick="closeClientDetail(); openEditClientModal(currentDetailClientId);">Modifier</button>
+<button class="px-md py-sm bg-surface-container-highest text-on-surface-variant rounded-lg font-semibold hover:bg-outline-variant transition-all" onclick="closeClientDetail()">Fermer</button>
+</div>
+</div>
+</div>
+
+<!-- ============ GLOBAL: Add/Edit Client modal ============ -->
+<div id="addClientModal" class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-50 items-center justify-center" style="display:none;">
+<div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-lg p-lg space-y-md max-h-[90vh] overflow-y-auto">
+<div class="flex justify-between items-center">
+<h3 class="font-title-md text-title-md" id="clientModalTitle">Nouveau Client</h3>
+<button class="p-sm hover:bg-surface-container-high rounded-full transition-all" onclick="closeAddClientModal()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<p id="clientModalError" class="hidden text-body-md text-error bg-error-container/30 rounded-lg px-md py-sm"></p>
+<section class="border border-outline-variant rounded-lg p-md bg-surface-container-low space-y-sm">
+<div class="flex items-start justify-between gap-md">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">OCR documents</p>
+<p class="text-body-md text-on-surface-variant mt-xs">Importer permis, CIN ou passeport. Les champs detectes seront pre-remplis avant validation.</p>
+</div>
+<span class="material-symbols-outlined text-primary">document_scanner</span>
+</div>
+<label for="clientOcrFile" class="flex flex-col items-center justify-center gap-xs border border-dashed border-outline-variant bg-white rounded-lg p-md cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
+<span class="material-symbols-outlined text-primary text-[28px]">upload_file</span>
+<span class="font-semibold text-body-md text-on-surface">Choisir une image de document</span>
+<span class="text-caption text-on-surface-variant">JPG, PNG ou WEBP - analyse avec OCR-rex (PaddleOCR)</span>
+</label>
+<input id="clientOcrFile" class="hidden" type="file" accept="image/*" onchange="handleClientOcrFile(event)"/>
+<div id="ocrStatusBox" class="hidden border border-outline-variant rounded-lg bg-white p-sm space-y-xs">
+<div class="flex items-center justify-between gap-md">
+<span id="ocrStatusText" class="text-caption text-on-surface-variant">OCR en attente</span>
+<span id="ocrProgressText" class="text-caption font-semibold text-primary">0%</span>
+</div>
+<div class="h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div id="ocrProgressBar" class="h-full bg-primary transition-all" style="width:0%"></div>
+</div>
+</div>
+<div id="ocrResultBox" class="hidden rounded-lg border border-primary/20 bg-primary/5 p-sm">
+<details>
+<summary class="text-caption text-on-surface-variant cursor-pointer font-semibold">Voir le texte brut extrait</summary>
+<pre id="ocrExtractedText" class="mt-xs max-h-24 overflow-auto whitespace-pre-wrap text-[11px] leading-4 text-on-surface"></pre>
+</details>
+</div>
+</section>
+<div class="grid grid-cols-2 gap-sm">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">PRÉNOM *</label>
+<input id="newClientFirstName" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="Sami"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">NOM *</label>
+<input id="newClientLastName" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="R."/>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">TÉLÉPHONE</label>
+<input id="newClientPhone" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="+33 6 00 00 00 00"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">EMAIL</label>
+<input id="newClientEmail" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="email" placeholder="sami@email.com"/>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">N° PERMIS</label>
+<input id="newClientLicenseNumber" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="FR-DL-00000000"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">EXPIRATION PERMIS</label>
+<input id="newClientLicenseExpiry" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="date"/>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">N° CIN</label>
+<input id="newClientCin" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="AB123456"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">NIVEAU DE RISQUE</label>
+<select id="newClientRisk" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md">
+<option value="LOW">Low</option>
+<option value="MEDIUM">Medium</option>
+<option value="HIGH">High</option>
+</select>
+</div>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">ADRESSE</label>
+<input id="newClientAddress" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="12 rue de la Paix, Casablanca"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">NOTES</label>
+<textarea id="newClientNotes" rows="2" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" placeholder="Notes internes..."></textarea>
+</div>
+<div class="flex items-center gap-lg pt-xs">
+<label class="flex items-center gap-sm text-body-md"><input id="newClientVip" type="checkbox" class="rounded"/> VIP</label>
+<label class="flex items-center gap-sm text-body-md"><input id="newClientBlacklisted" type="checkbox" class="rounded"/> Blacklisté</label>
+</div>
+<div class="flex gap-md pt-sm">
+<button class="flex-1 bg-surface-container-highest text-on-surface-variant py-sm rounded-lg font-semibold hover:bg-outline-variant transition-all" onclick="closeAddClientModal()">Annuler</button>
+<button id="clientModalSubmitBtn" class="flex-1 bg-primary text-on-primary py-sm rounded-lg font-semibold hover:opacity-90 transition-all" onclick="submitClientForm()">Ajouter</button>
+</div>
+</div>
+</div>
+
+<!-- ============ GLOBAL: Add Vehicle modal ============ -->
+<div id="addVehicleModal" class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-50 items-center justify-center" style="display:none;">
+<div class="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-sm p-lg space-y-md">
+<div class="flex justify-between items-center">
+<h3 id="addVehicleModalTitle" class="font-title-md text-title-md">Nouveau Véhicule</h3>
+<button class="p-sm hover:bg-surface-container-high rounded-full transition-all" onclick="closeAddVehicleModal()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="space-y-sm">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">MODÈLE</label>
+<input id="newVehicleModel" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="ex: Dacia Sandero"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">PLAQUE</label>
+<input id="newVehiclePlate" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="text" placeholder="AA-000-BB"/>
+</div>
+<div class="grid grid-cols-2 gap-sm">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">TARIF/JOUR</label>
+<input id="newVehicleTarif" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="number" placeholder="45"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">KM</label>
+<input id="newVehicleKm" class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md" type="number" placeholder="0"/>
+</div>
+</div>
+</div>
+<div class="flex gap-md pt-sm">
+<button class="flex-1 bg-surface-container-highest text-on-surface-variant py-sm rounded-lg font-semibold hover:bg-outline-variant transition-all" onclick="closeAddVehicleModal()">Annuler</button>
+<button id="submitVehicleBtn" class="flex-1 bg-primary text-on-primary py-sm rounded-lg font-semibold hover:opacity-90 transition-all" onclick="submitVehicleForm()">Ajouter</button>
+</div>
+</div>
+</div>
+
+<!-- ============ GLOBAL: Nouvelle Reservation slide-over ============ -->
+<div class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-50 justify-end" id="slideOverBackdrop" style="display:none;">
+<!-- Content Panel -->
+<div class="w-full max-w-md bg-surface-container-lowest h-full shadow-2xl flex flex-col border-l border-outline-variant" id="slideOverPanel" style="transform:translateX(100%); transition: transform 0.35s cubic-bezier(0.16,1,0.3,1);">
+<!-- Header -->
+<div class="px-lg py-lg border-b border-outline-variant flex justify-between items-center bg-surface">
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">Nouvelle Réservation</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Créez une session de location</p>
+</div>
+<button class="p-sm hover:bg-surface-container-high rounded-full transition-all" onclick="closePanel()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Panel Content -->
+<div class="flex-1 overflow-y-auto px-lg py-lg space-y-xl">
+<!-- Client Info (Locked) -->
+<section class="space-y-md">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">person</span>
+<h4 class="font-title-md text-title-md">Informations Client</h4>
+</div>
+<div class="bg-surface-container-low p-md rounded border border-outline-variant grid grid-cols-2 gap-md relative">
+<div class="absolute top-2 right-2">
+<span class="px-sm py-xs bg-secondary/15 text-secondary text-[10px] font-bold uppercase tracking-wider rounded border border-secondary/20" id="resClientRiskBadge">Risk: Low</span>
+</div>
+<div class="col-span-2">
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">CLIENT</label>
+<select class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md font-semibold" id="resClientSelect" onchange="onReservationClientChange()"></select>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">TÉLÉPHONE</label>
+<p class="font-body-md text-body-md" id="resClientPhone">—</p>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs">PERMIS EXP.</label>
+<p class="font-body-md text-body-md font-mono" id="resClientPermis">—</p>
+</div>
+</div>
+</section>
+<!-- Dates Selection -->
+<section class="space-y-md">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">calendar_month</span>
+<h4 class="font-title-md text-title-md">Période de Location</h4>
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs" for="dateDepart">DATE DÉPART</label>
+<input class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md focus:ring-2 focus:ring-primary focus:border-transparent outline-none" id="dateDepart" type="date"/>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-xs" for="dateRetour">DATE RETOUR</label>
+<input class="w-full bg-white border border-outline-variant rounded px-md py-sm font-body-md text-body-md focus:ring-2 focus:ring-primary focus:border-transparent outline-none" id="dateRetour" type="date"/>
+</div>
+</div>
+<div class="flex items-center gap-xs text-primary font-semibold">
+<span class="material-symbols-outlined text-sm">schedule</span>
+<span class="font-body-md text-body-md" id="durationDisplay">Durée : 5 jours</span>
+</div>
+</section>
+<!-- Vehicle Picker -->
+<section class="space-y-md">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">directions_car</span>
+<h4 class="font-title-md text-title-md">Sélection du Véhicule</h4>
+</div>
+<div class="space-y-sm" id="resVehicleList">
+</div>
+</section>
+</div>
+<!-- Footer / Live Recap -->
+<div class="bg-surface-container border-t border-outline-variant p-lg space-y-md">
+<div class="flex justify-between items-center">
+<p class="font-body-md text-body-md text-on-surface-variant">Récapitulatif</p>
+<p class="font-body-md text-body-md text-on-surface-variant" id="calcBreakdown">50€ x 5j</p>
+</div>
+<div class="flex justify-between items-center">
+<p class="font-title-md text-title-md text-on-surface">Total à payer</p>
+<p class="font-headline-lg text-headline-lg text-primary font-bold" id="totalDisplay">250€</p>
+</div>
+<div class="flex gap-md pt-sm">
+<button class="flex-1 bg-surface-container-highest text-on-surface-variant py-md rounded-lg font-semibold hover:bg-outline-variant transition-all active:scale-95" onclick="closePanel()">
+                        Annuler
+                    </button>
+<button class="flex-1 bg-primary text-on-primary py-md rounded-lg font-semibold hover:opacity-90 shadow-md shadow-primary/20 transition-all active:scale-95" onclick="confirmReservation()">
+                        Confirmer
+                    </button>
+</div>
+</div>
+</div>
+</div>
+
+<script src="./src/js/navigation.js"></script>
+<script src="./src/js/contract-interactions.js"></script>
+
+<script src="./src/js/app.js"></script>
+
+</body>
+</html>
